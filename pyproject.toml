@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "telegram-token-forwarder"
+version = "0.1.0"
+description = "Encaminha somente contratos de token recebidos no Telegram."
+requires-python = ">=3.10"
+dependencies = [
+    "eth-account==0.14.0",
+    "httpx[socks]==0.28.1",
+    "Telethon==1.44.0",
+    "python-dotenv==1.2.3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==9.1.1"]
+
+[project.scripts]
+telegram-token-forwarder = "token_forwarder.cli:main"
+wallet-guard = "wallet_guard.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-q --basetemp=.pytest-tmp"
+testpaths = ["tests"]
