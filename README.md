@@ -1,78 +1,54 @@
 # Contract Message Router
 
-**Extract contract addresses, apply routing rules and retain message history.**
-
 ![Language: Python](https://img.shields.io/badge/Language-Python-3776AB?style=flat-square&logo=python) ![Routing: Telethon](https://img.shields.io/badge/Routing-Telethon-555555?style=flat-square) [![License: MIT](https://img.shields.io/badge/License-MIT-555555?style=flat-square)](LICENSE)
 
-[Overview](#overview) · [Quickstart](#quickstart) · [Example](#example) · [Validation](#validation) · [Documentation](#documentation)
+Extract contract addresses from Telegram messages, apply source/destination rules and retain forwarding history in SQLite.
 
-## Overview
+The forwarder is useful when several feeds need a consistent extraction and deduplication policy. A separate `wallet_guard` package is also included; it has signing/broadcast capabilities and is not required to understand message routing.
 
-A Telegram message pipeline for extracting contract addresses, applying routing rules and retaining local history.
+## Address extraction without Telegram
 
-**Stack:** Python · Telethon · SQLite · httpx · typed configuration · pytest
-
-## Routing with persistent deduplication
-
-| Component | Behavior |
-| --- | --- |
-| Extract | Message parsing identifies supported contract-address candidates. |
-| Route | Configured sources/destinations and network rules determine forwarding. |
-| Remember | SQLite history prevents duplicate processing across runs. |
-
-## Processing path
-
-```mermaid
-flowchart LR
-  N0["Configured message source"]
-  N1["address extractor and routing policy"]
-  N2["history/deduplication"]
-  N3["configured destination"]
-N0 --> N1 --> N2 --> N3
-```
-
-## Quickstart
+After installing the package:
 
 ```console
-python -m venv .venv
-# Activate .venv, then:
 python -m pip install -e .
-telegram-token-forwarder --help
+python -c "from token_forwarder.extractor import extract_contracts; print(extract_contracts('Token: 0x0000000000000000000000000000000000000001', 'evm'))"
 ```
 
-The commands above install prerequisites or run the specified offline checks. Live collection, cloud operations, messaging and trading are separate operational steps when present.
+Expected local result:
 
-## Example
+```text
+('0x0000000000000000000000000000000000000001',)
+```
 
-**Inspect the workflow**
+The public address is synthetic. [extractor.py](src/token_forwarder/extractor.py) preserves encounter order, deduplicates EVM addresses case-insensitively and checks that Solana Base58 candidates decode to 32 bytes. The single-contract helper returns `None` for zero or multiple candidates.
 
-Inspect the source-chat, destination and network rules in [.env.example](.env.example). A message containing a supported address becomes an extraction candidate, is checked against routing/history state, and may be forwarded to the configured destination. Reprocessing the same history entry should follow the repository deduplication policy.
+## From candidate to forwarded message
 
-## Configuration and storage
+```mermaid
+sequenceDiagram
+  participant T as Telegram source
+  participant E as Extractor and routing rules
+  participant H as SQLite history
+  participant D as Destination
+  T->>E: Incoming message
+  E->>H: Check processing identity
+  alt already handled
+    H-->>E: Skip duplicate
+  else eligible message
+    E->>D: Configured forwarding action
+    E->>H: Retain outcome
+  end
+```
 
-Python 3.10+, Telethon and SQLite. `DRY_RUN`, `SOURCE_CHATS`, `DESTINATION_CHAT`, `STATE_DB` and `TELEGRAM_SESSION` control the forwarder. The separate wallet-guard command has independent dry-run, signing and broadcast settings.
+`SOURCE_CHATS`, `DESTINATION_CHAT`, `TELEGRAM_SESSION`, `STATE_DB` and `DRY_RUN` are documented in [.env.example](.env.example). `telegram-token-forwarder --help` displays the forwarder's interface. Session creation and forwarding contact Telegram; configure only accounts and destinations you control.
 
-## Repository guide
+## Two operational surfaces
 
-| Location | Responsibility |
-| --- | --- |
-| [src/token_forwarder/cli.py](src/token_forwarder/cli.py) | Forwarder CLI |
-| [src/token_forwarder/extractor.py](src/token_forwarder/extractor.py) | Address extraction |
-| [src/token_forwarder/history.py](src/token_forwarder/history.py) | Deduplication/history |
-| [src/wallet_guard](src/wallet_guard) | Separate wallet-guard implementation |
+[routing.py](src/token_forwarder/routing.py) and [history.py](src/token_forwarder/history.py) implement the message path. [wallet_guard](src/wallet_guard) separately implements discovery, preflight, signing and broadcast-related code with its own configuration. Do not interpret a forwarding dry-run setting as a global safety switch for every executable in this repository.
 
-## Validation
+Targeted tests cover extraction/routing/history and wallet-guard components. Anvil and provider-facing tests have additional prerequisites; no live messaging or wallet operation is implied by an offline parser example.
 
-The quickstart lists the declared checks. No passing CI or coverage claim is implied by the technology badges.
+**Technology:** Python · Telethon · SQLite · httpx · typed configuration · pytest
 
-## Scope and operational boundaries
-
-The repository also includes wallet-guard execution code. Its full scope is not read-only. Real Telegram sessions, outgoing messages and wallet operations require deliberate account configuration; session files and wallet material remain local.
-
-## Documentation
-
-- The repository guide above links directly to the implementation and configuration files.
-
-## License and attribution
-
-Project-authored source code is licensed under the [MIT License](LICENSE). Third-party components and datasets retain their respective rights and licenses.
+Project-authored source: [MIT](LICENSE). Third-party components retain their own notices and terms.
